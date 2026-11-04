@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hay Day Sync Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Firebase Scripts (Compatíveis e Prontos para Navegador) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      background-color: #f7f3e8;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hay-card {
+      background: #ffffff;
+      border: 2px solid #e2d7c3;
+      border-radius: 1rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+    }
+  </style>
+</head>
+<body class="min-h-screen text-amber-950 pb-16">
+
+  <!-- Header -->
+  <header class="bg-amber-600 text-white py-3.5 px-4 sm:px-6 shadow-md border-b-4 border-amber-700 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <span class="text-2xl sm:text-3xl">🌾</span>
+        <div>
+          <h1 class="text-lg sm:text-xl font-black tracking-wide uppercase">Hay Day Sync</h1>
+          <p class="text-amber-100 text-[11px] hidden sm:block">PC & Celular Sincronizados</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="syncIndicator" class="flex items-center gap-1.5 text-xs bg-amber-700/80 px-2.5 py-1 rounded-full font-medium">
+          <i class="fa-solid fa-circle text-[9px] text-emerald-400 animate-pulse"></i> Sincronizado
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-3 sm:px-4 mt-4 sm:mt-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- COLUNA 1: Inserção e Pedidos (5 cols) -->
+    <section class="lg:col-span-5 flex flex-col gap-5">
+      
+      <!-- Novo Pedido -->
+      <div class="hay-card p-4 sm:p-5">
+        <h2 class="text-base font-bold flex items-center gap-2 mb-3 text-amber-900 border-b pb-2">
+          <i class="fa-solid fa-cart-plus text-amber-600"></i> Adicionar Pedido
+        </h2>
+
+        <div class="flex flex-col gap-3">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">Máquina</label>
+              <select id="categorySelect" class="w-full text-xs sm:text-sm border-2 border-amber-200 rounded-lg p-2 bg-amber-50/50 focus:border-amber-500 focus:outline-none">
+                <option value="all">Todas</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">Qtd</label>
+              <div class="flex items-center">
+                <button onclick="adjustOrderQty(-1)" class="w-8 h-9 rounded-l-lg bg-amber-200 hover:bg-amber-300 font-bold">-</button>
+                <input type="number" id="orderItemQty" value="1" min="1" max="99" class="w-full h-9 text-center border-y-2 border-amber-200 p-1 font-bold text-sm focus:outline-none">
+                <button onclick="adjustOrderQty(1)" class="w-8 h-9 rounded-r-lg bg-amber-200 hover:bg-amber-300 font-bold">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">Item Desejado</label>
+            <select id="itemSelect" class="w-full border-2 border-amber-200 rounded-lg p-2.5 bg-amber-50/50 focus:border-amber-500 focus:outline-none font-semibold text-xs sm:text-sm">
+            </select>
+          </div>
+
+          <button onclick="addOrder()" class="mt-1 bg-emerald-600 active:bg-emerald-800 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-plus"></i> Inserir Pedido
+          </button>
+        </div>
+      </div>
+
+      <!-- Pedidos Salvos na Nuvem -->
+      <div class="hay-card p-4 sm:p-5">
+        <div class="flex items-center justify-between border-b pb-2 mb-3">
+          <div>
+            <h2 class="text-base font-bold text-amber-900 flex items-center gap-2">
+              <i class="fa-solid fa-clipboard-list text-amber-600"></i> Fila de Pedidos
+            </h2>
+            <p class="text-[11px] text-stone-500">Ajuste o que já está na máquina.</p>
+          </div>
+          <button onclick="clearAllOrders()" class="text-xs text-red-600 hover:underline font-semibold">Limpar Tudo</button>
+        </div>
+
+        <div id="ordersList" class="flex flex-col gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+          <p class="text-stone-400 text-sm text-center py-6">Carregando pedidos da nuvem...</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- COLUNA 2: Máquinas e Insumos Faltantes (7 cols) -->
+    <section class="lg:col-span-7 flex flex-col gap-5">
+
+      <!-- Máquinas em Uso -->
+      <div class="hay-card p-4 sm:p-5 border-amber-400 bg-amber-50/30">
+        <div class="flex items-center justify-between border-b pb-2 mb-2">
+          <h2 class="text-base font-bold text-amber-950 flex items-center gap-2">
+            <i class="fa-solid fa-industry text-amber-600"></i> Visão Geral das Máquinas
+          </h2>
+          <span class="text-xs bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded-full" id="machineCountBadge">0 Máquinas</span>
+        </div>
+        <p class="text-[11px] text-stone-500 mb-3">Tudo o que você precisa abastecer em cada equipamento:</p>
+
+        <div id="machinesContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <p class="text-stone-400 text-sm col-span-full py-3 text-center">Nenhuma máquina ocupada.</p>
+        </div>
+      </div>
+
+      <!-- Intermediários Pendentes -->
+      <div class="hay-card p-4 sm:p-5 border-amber-300">
+        <h2 class="text-base font-bold text-amber-900 flex items-center gap-2 mb-1">
+          <i class="fa-solid fa-gears text-amber-600"></i> Subprodutos Faltando
+        </h2>
+        <p class="text-[11px] text-stone-500 mb-3">Itens que precisam ser feitos para liberar outros pratos.</p>
+        <div id="intermediatesList" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <p class="text-stone-400 text-sm col-span-full py-2 text-center">Nenhum subproduto pendente.</p>
+        </div>
+      </div>
+
+      <!-- Matérias-Primas Faltantes -->
+      <div class="hay-card p-4 sm:p-5 border-emerald-300 bg-emerald-50/20">
+        <h2 class="text-base font-bold text-emerald-950 flex items-center gap-2 mb-1">
+          <i class="fa-solid fa-seedling text-emerald-600"></i> Matérias-Primas Pendentes (Lavoura/Animais)
+        </h2>
+        <p class="text-[11px] text-stone-500 mb-3">Total que você ainda precisa plantar ou colher.</p>
+        <div id="rawMaterialsList" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <p class="text-stone-400 text-sm col-span-full py-3 text-center">Tudo pronto!</p>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script>
+    // ==========================================
+    // 1. CONFIGURAÇÃO DO FIREBASE (COLE A SUA AQUI)
+    // ==========================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyC3tuxMBosVWyXuFUl_OpGxWVpamTDoJMA",
+    authDomain: "hayday-helper.firebaseapp.com",
+    projectId: "hayday-helper",
+    storageBucket: "hayday-helper.firebasestorage.app",
+    messagingSenderId: "784996437828",
+    appId: "1:784996437828:web:4830e2aecf4ae1ddbf5111"
+  };
+
+    // Inicializa Firebase & Firestore
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const ordersCol = db.collection("orders");
+
+    // ==========================================
+    // 2. BANCO DE DADOS DE RECEITAS DO HAY DAY
+    // ==========================================
+    const DB = {
+      // Lavoura / Animais
+      "Trigo": { icon: "🌾", machine: null, ingredients: null },
+      "Milho": { icon: "🌽", machine: null, ingredients: null },
+      "Cenoura": { icon: "🥕", machine: null, ingredients: null },
+      "Soja": { icon: "🌱", machine: null, ingredients: null },
+      "Cana-de-Açúcar": { icon: "🎋", machine: null, ingredients: null },
+      "Tomate": { icon: "🍅", machine: null, ingredients: null },
+      "Leite": { icon: "🥛", machine: null, ingredients: null },
+      "Ovo": { icon: "🥚", machine: null, ingredients: null },
+      "Bacon": { icon: "🥓", machine: null, ingredients: null },
+
+      // Engenho de Açúcar
+      "Açúcar Mascavo": { icon: "🟫", machine: "Engenho de Açúcar", ingredients: { "Cana-de-Açúcar": 1 } },
+      "Açúcar Branco": { icon: "⬜", machine: "Engenho de Açúcar", ingredients: { "Cana-de-Açúcar": 2 } },
+      "Xarope": { icon: "🍯", machine: "Engenho de Açúcar", ingredients: { "Cana-de-Açúcar": 4 } },
+
+      // Laticínio
+      "Creme de Leite": { icon: "🍶", machine: "Laticínio", ingredients: { "Leite": 1 } },
+      "Manteiga": { icon: "🧈", machine: "Laticínio", ingredients: { "Leite": 2 } },
+      "Queijo": { icon: "🧀", machine: "Laticínio", ingredients: { "Leite": 3 } },
+
+      // Padaria
+      "Pão": { icon: "🍞", machine: "Padaria", ingredients: { "Trigo": 3 } },
+      "Pão de Milho": { icon: "🥖", machine: "Padaria", ingredients: { "Milho": 2, "Ovo": 2 } },
+      "Cookie": { icon: "🍪", machine: "Padaria", ingredients: { "Trigo": 2, "Açúcar Mascavo": 1, "Ovo": 2 } },
+      "Pizza": { icon: "🍕", machine: "Padaria", ingredients: { "Trigo": 2, "Tomate": 1, "Queijo": 1 } },
+
+      // Forno de Tortas
+      "Torta de Cenoura": { icon: "🥧", machine: "Forno de Tortas", ingredients: { "Cenoura": 3, "Trigo": 2, "Ovo": 1 } },
+      "Torta de Bacon": { icon: "🥧", machine: "Forno de Tortas", ingredients: { "Bacon": 2, "Ovo": 1, "Trigo": 2 } },
+
+      // Churrasqueira
+      "Panqueca": { icon: "🥞", machine: "Churrasqueira", ingredients: { "Ovo": 3, "Açúcar Mascavo": 1 } },
+      "Bacon com Ovos": { icon: "🍳", machine: "Churrasqueira", ingredients: { "Ovo": 4, "Bacon": 2 } },
+      "Hambúrguer": { icon: "🍔", machine: "Churrasqueira", ingredients: { "Pão": 2, "Bacon": 2 } },
+
+      // Pipoqueira
+      "Pipoca": { icon: "🍿", machine: "Pipoqueira", ingredients: { "Milho": 2 } },
+      "Pipoca Amanteigada": { icon: "🍿", machine: "Pipoqueira", ingredients: { "Milho": 2, "Manteiga": 1 } },
+
+      // Confeitaria
+      "Bolo de Cenoura": { icon: "🎂", machine: "Confeitaria", ingredients: { "Cenoura": 2, "Açúcar Mascavo": 1, "Manteiga": 1 } }
+    };
+
+    // Estado local em memória
+    let orders = [];
+
+    // ==========================================
+    // 3. SINCRONIZAÇÃO EM TEMPO REAL (FIRESTORE)
+    // ==========================================
+    ordersCol.onSnapshot(snapshot => {
+      orders = [];
+      snapshot.forEach(doc => {
+        orders.push({ id: doc.id, ...doc.data() });
+      });
+      render();
+    }, error => {
+      console.error("Erro no Firestore:", error);
+      document.getElementById("syncIndicator").innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-400"></i> Desconectado`;
+    });
+
+    window.onload = () => {
+      populateCategories();
+      populateItems();
+      document.getElementById("categorySelect").addEventListener("change", populateItems);
+    };
+
+    function populateCategories() {
+      const select = document.getElementById("categorySelect");
+      const machines = [...new Set(Object.values(DB).map(i => i.machine).filter(Boolean))];
+      machines.forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = m;
+        select.appendChild(opt);
+      });
+    }
+
+    function populateItems() {
+      const cat = document.getElementById("categorySelect").value;
+      const select = document.getElementById("itemSelect");
+      select.innerHTML = "";
+
+      Object.keys(DB).forEach(key => {
+        if (!DB[key].machine) return;
+        if (cat === "all" || DB[key].machine === cat) {
+          const opt = document.createElement("option");
+          opt.value = key;
+          opt.textContent = `${DB[key].icon} ${key} (${DB[key].machine})`;
+          select.appendChild(opt);
+        }
+      });
+    }
+
+    function adjustOrderQty(amount) {
+      const input = document.getElementById("orderItemQty");
+      let val = parseInt(input.value) || 1;
+      val = Math.max(1, Math.min(99, val + amount));
+      input.value = val;
+    }
+
+    // Ações que gravam no Firebase
+    async function addOrder() {
+      const itemName = document.getElementById("itemSelect").value;
+      const qty = parseInt(document.getElementById("orderItemQty").value) || 1;
+      if (!itemName) return;
+
+      const existing = orders.find(o => o.item === itemName);
+      if (existing) {
+        await ordersCol.doc(existing.id).update({
+          totalQty: existing.totalQty + qty
+        });
+      } else {
+        await ordersCol.add({
+          item: itemName,
+          totalQty: qty,
+          inProduction: 0,
+          createdAt: Date.now()
+        });
+      }
+    }
+
+    async function updateInProduction(id, delta) {
+      const order = orders.find(o => o.id === id);
+      if (!order) return;
+      const newVal = Math.max(0, Math.min(order.totalQty, order.inProduction + delta));
+      await ordersCol.doc(id).update({ inProduction: newVal });
+    }
+
+    async function removeOrder(id) {
+      await ordersCol.doc(id).delete();
+    }
+
+    async function clearAllOrders() {
+      const batch = db.batch();
+      orders.forEach(o => {
+        batch.delete(ordersCol.doc(o.id));
+      });
+      await batch.commit();
+    }
+
+    // ==========================================
+    // 4. CÁLCULO DE DEPENDÊNCIAS
+    // ==========================================
+    function calculateRequirements() {
+      const rawTotals = {};
+      const intermediateTotals = {};
+      const machineWorkload = {};
+
+      function registerMachineTask(machine, item, count) {
+        if (!machine || count <= 0) return;
+        if (!machineWorkload[machine]) machineWorkload[machine] = {};
+        machineWorkload[machine][item] = (machineWorkload[machine][item] || 0) + count;
+      }
+
+      function resolveItem(itemName, count, isRoot = false) {
+        if (count <= 0) return;
+        const data = DB[itemName];
+        if (!data) return;
+
+        if (!data.ingredients) {
+          rawTotals[itemName] = (rawTotals[itemName] || 0) + count;
+          return;
+        }
+
+        if (data.machine) {
+          registerMachineTask(data.machine, itemName, count);
+        }
+
+        if (!isRoot) {
+          intermediateTotals[itemName] = (intermediateTotals[itemName] || 0) + count;
+        }
+
+        for (const [subItem, subQty] of Object.entries(data.ingredients)) {
+          resolveItem(subItem, subQty * count, false);
+        }
+      }
+
+      orders.forEach(order => {
+        const remaining = order.totalQty - order.inProduction;
+        if (remaining > 0) {
+          resolveItem(order.item, remaining, true);
+        }
+      });
+
+      return { rawTotals, intermediateTotals, machineWorkload };
+    }
+
+    // ==========================================
+    // 5. RENDERIZAÇÃO
+    // ==========================================
+    function render() {
+      const { rawTotals, intermediateTotals, machineWorkload } = calculateRequirements();
+
+      // Renderizar Pedidos
+      const ordersContainer = document.getElementById("ordersList");
+      if (orders.length === 0) {
+        ordersContainer.innerHTML = `<p class="text-stone-400 text-sm text-center py-6">Nenhum pedido cadastrado.</p>`;
+      } else {
+        ordersContainer.innerHTML = orders.map(o => {
+          const pending = o.totalQty - o.inProduction;
+          const isComplete = pending === 0;
+
+          return `
+            <div class="p-2.5 sm:p-3 rounded-xl border ${isComplete ? 'bg-emerald-50/70 border-emerald-300' : 'bg-amber-50/70 border-amber-200'} flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">${DB[o.item]?.icon || '📦'}</span>
+                  <div>
+                    <h3 class="font-bold text-xs sm:text-sm text-amber-950">${o.item}</h3>
+                    <p class="text-[10px] text-stone-500">${DB[o.item]?.machine || 'Máquina'}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${isComplete ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'}">
+                    Total: ${o.totalQty}
+                  </span>
+                  <button onclick="removeOrder('${o.id}')" class="text-stone-400 hover:text-red-600 p-1">
+                    <i class="fa-solid fa-trash-can text-sm"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs">
+                <span class="font-medium text-stone-600 text-[11px] sm:text-xs">
+                  <i class="fa-solid fa-spinner ${pending > 0 ? 'text-amber-500 fa-spin' : 'text-emerald-500'} mr-1"></i>
+                  Produzindo: <b>${o.inProduction}</b> / ${o.totalQty}
+                </span>
+                <div class="flex items-center gap-1.5">
+                  <button onclick="updateInProduction('${o.id}', -1)" ${o.inProduction === 0 ? 'disabled' : ''} class="w-6 h-6 rounded bg-stone-100 active:bg-stone-300 hover:bg-stone-200 disabled:opacity-30 font-black">-</button>
+                  <button onclick="updateInProduction('${o.id}', 1)" ${o.inProduction === o.totalQty ? 'disabled' : ''} class="w-6 h-6 rounded bg-amber-500 active:bg-amber-700 hover:bg-amber-600 text-white disabled:opacity-30 font-black">+</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      // Renderizar Máquinas
+      const machinesContainer = document.getElementById("machinesContainer");
+      const activeMachines = Object.keys(machineWorkload);
+      document.getElementById("machineCountBadge").textContent = `${activeMachines.length} Máquina${activeMachines.length !== 1 ? 's' : ''}`;
+
+      if (activeMachines.length === 0) {
+        machinesContainer.innerHTML = `<p class="text-stone-400 text-xs col-span-full py-2 text-center">Nenhuma máquina ocupada no momento.</p>`;
+      } else {
+        machinesContainer.innerHTML = activeMachines.map(mach => {
+          const tasks = machineWorkload[mach];
+          const taskItems = Object.entries(tasks).map(([item, qty]) => `
+            <div class="flex items-center justify-between py-1 border-b border-stone-100 last:border-0 text-xs">
+              <span class="text-stone-700">${DB[item]?.icon || '📦'} ${item}</span>
+              <span class="font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded text-[11px]">x${qty}</span>
+            </div>
+          `).join("");
+
+          return `
+            <div class="bg-white rounded-xl p-3 border border-amber-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <h4 class="font-bold text-[11px] uppercase tracking-wider text-amber-800 flex items-center gap-1.5 pb-1.5 mb-1.5 border-b border-amber-100">
+                  <i class="fa-solid fa-gears text-amber-500"></i> ${mach}
+                </h4>
+                <div class="flex flex-col gap-0.5">
+                  ${taskItems}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      // Renderizar Intermediários
+      const interContainer = document.getElementById("intermediatesList");
+      const interKeys = Object.keys(intermediateTotals);
+      if (interKeys.length === 0) {
+        interContainer.innerHTML = `<p class="text-stone-400 text-xs col-span-full py-2 text-center">Nenhum subproduto pendente.</p>`;
+      } else {
+        interContainer.innerHTML = interKeys.map(key => `
+          <div class="flex items-center justify-between bg-white p-2 rounded-xl border border-amber-200 shadow-sm">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">${DB[key]?.icon || '⚙️'}</span>
+              <div>
+                <p class="font-semibold text-xs text-stone-800">${key}</p>
+                <p class="text-[9px] text-stone-400">${DB[key].machine}</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md">${intermediateTotals[key]}</span>
+          </div>
+        `).join("");
+      }
+
+      // Renderizar Matérias-Primas Básicas
+      const rawContainer = document.getElementById("rawMaterialsList");
+      const rawKeys = Object.keys(rawTotals);
+      if (rawKeys.length === 0) {
+        rawContainer.innerHTML = `<p class="text-stone-400 text-xs col-span-full py-2 text-center">Nenhuma matéria-prima pendente.</p>`;
+      } else {
+        rawContainer.innerHTML = rawKeys.map(key => `
+          <div class="flex items-center justify-between bg-white p-2 rounded-xl border border-emerald-200 shadow-sm">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xl">${DB[key]?.icon || '🌱'}</span>
+              <span class="font-medium text-xs text-stone-700">${key}</span>
+            </div>
+            <span class="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">${rawTotals[key]}</span>
+          </div>
+        `).join("");
+      }
+    }
+  </script>
+</body>
+</html>
