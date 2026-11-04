@@ -165,7 +165,7 @@
 
     // Inicializa Firebase & Firestore
     firebase.initializeApp(firebaseConfig);
-
+    // Faz login anônimo automático no navegador (gera um token seguro de sessão)
     firebase.auth().signInAnonymously().catch((error) => {
       console.error("Erro na autenticação anônima:", error);
     });
