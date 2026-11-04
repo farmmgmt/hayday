@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hay Day Sync Pro</title>
+  <title>Hay Day Sync Pro - com Busca Inteligente</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <!-- Firebase Scripts (Compatíveis e Prontos para Navegador) -->
+  <!-- Firebase Scripts -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -24,6 +24,14 @@
       border-radius: 1rem;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
     }
+    /* Estilização da barra de rolagem dos resultados */
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #e2d7c3;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body class="min-h-screen text-amber-950 pb-16">
@@ -35,7 +43,7 @@
         <span class="text-2xl sm:text-3xl">🌾</span>
         <div>
           <h1 class="text-lg sm:text-xl font-black tracking-wide uppercase">Hay Day Sync</h1>
-          <p class="text-amber-100 text-[11px] hidden sm:block">PC & Celular Sincronizados</p>
+          <p class="text-amber-100 text-[11px] hidden sm:block">PC & Celular com Busca em Tempo Real</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -51,65 +59,96 @@
     <!-- COLUNA 1: Inserção e Pedidos (5 cols) -->
     <section class="lg:col-span-5 flex flex-col gap-5">
       
-      <!-- Novo Pedido -->
+      <!-- Novo Pedido com Busca Estilo Google -->
       <div class="hay-card p-4 sm:p-5">
         <h2 class="text-base font-bold flex items-center gap-2 mb-3 text-amber-900 border-b pb-2">
           <i class="fa-solid fa-cart-plus text-amber-600"></i> Adicionar Pedido
         </h2>
 
         <div class="flex flex-col gap-3">
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">Máquina</label>
+          
+          <div class="grid grid-cols-3 gap-2">
+            <!-- Filtro de Categoria -->
+            <div class="col-span-2">
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">Filtrar por Máquina</label>
               <select id="categorySelect" class="w-full text-xs sm:text-sm border-2 border-amber-200 rounded-lg p-2 bg-amber-50/50 focus:border-amber-500 focus:outline-none">
-                <option value="all">Todas</option>
+                <option value="all">Todas as Máquinas</option>
               </select>
             </div>
-            <div>
+            <!-- Quantidade -->
+            <div class="col-span-1">
               <label class="block text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">Qtd</label>
               <div class="flex items-center">
-                <button onclick="adjustOrderQty(-1)" class="w-8 h-9 rounded-l-lg bg-amber-200 hover:bg-amber-300 font-bold">-</button>
-                <input type="number" id="orderItemQty" value="1" min="1" max="99" class="w-full h-9 text-center border-y-2 border-amber-200 p-1 font-bold text-sm focus:outline-none">
-                <button onclick="adjustOrderQty(1)" class="w-8 h-9 rounded-r-lg bg-amber-200 hover:bg-amber-300 font-bold">+</button>
+                <button onclick="adjustOrderQty(-1)" class="w-7 h-9 rounded-l-lg bg-amber-200 hover:bg-amber-300 font-bold text-sm">-</button>
+                <input type="number" id="orderItemQty" value="1" min="1" max="99" class="w-full h-9 text-center border-y-2 border-amber-200 p-1 font-bold text-xs sm:text-sm focus:outline-none">
+                <button onclick="adjustOrderQty(1)" class="w-7 h-9 rounded-r-lg bg-amber-200 hover:bg-amber-300 font-bold text-sm">+</button>
               </div>
             </div>
           </div>
 
-          <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">Item Desejado</label>
-            <select id="itemSelect" class="w-full border-2 border-amber-200 rounded-lg p-2.5 bg-amber-50/50 focus:border-amber-500 focus:outline-none font-semibold text-xs sm:text-sm">
-            </select>
+          <!-- CAMPO DE PESQUISA COM AUTOCOMPLETE (ESTILO GOOGLE) -->
+          <div class="relative">
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">Buscar Produto</label>
+            <div class="relative flex items-center">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 text-stone-400 text-sm pointer-events-none"></i>
+              <input 
+                type="text" 
+                id="productSearchInput" 
+                placeholder="Comece a digitar... (ex: Hambúrguer, Bolo)" 
+                autocomplete="off"
+                class="w-full pl-9 pr-9 py-2.5 text-xs sm:text-sm border-2 border-amber-200 rounded-xl bg-amber-50/40 focus:border-amber-500 focus:bg-white focus:outline-none font-semibold text-stone-800 placeholder-stone-400 transition"
+              >
+              <button 
+                id="clearSearchBtn" 
+                onclick="clearSearch()" 
+                class="hidden absolute right-3 text-stone-400 hover:text-stone-600 text-sm">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <!-- Lista Suspensa de Sugestões -->
+            <div 
+              id="autocompleteList" 
+              class="hidden absolute z-50 left-0 right-0 mt-1.5 bg-white border-2 border-amber-200 rounded-xl shadow-xl max-h-60 overflow-y-auto custom-scroll py-1">
+              <!-- Preenchido via JS -->
+            </div>
           </div>
 
-          <button onclick="addOrder()" class="mt-1 bg-emerald-600 active:bg-emerald-800 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
+          <!-- Indicador do Item Selecionado -->
+          <div id="selectedBadge" class="hidden flex items-center justify-between bg-amber-100/70 border border-amber-300 px-3 py-1.5 rounded-lg text-xs">
+            <span class="text-stone-600">Selecionado: <b id="selectedItemName" class="text-amber-950 font-bold"></b></span>
+            <span id="selectedItemMachine" class="text-[10px] bg-white px-2 py-0.5 rounded text-amber-800 font-semibold border border-amber-200"></span>
+          </div>
+
+          <button onclick="addOrder()" class="mt-1 bg-emerald-600 active:bg-emerald-800 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow transition flex items-center justify-center gap-2 text-sm">
             <i class="fa-solid fa-plus"></i> Inserir Pedido
           </button>
         </div>
       </div>
 
-      <!-- Pedidos Salvos na Nuvem -->
+      <!-- Fila de Pedidos -->
       <div class="hay-card p-4 sm:p-5">
         <div class="flex items-center justify-between border-b pb-2 mb-3">
           <div>
             <h2 class="text-base font-bold text-amber-900 flex items-center gap-2">
               <i class="fa-solid fa-clipboard-list text-amber-600"></i> Fila de Pedidos
             </h2>
-            <p class="text-[11px] text-stone-500">Ajuste o que já está na máquina.</p>
+            <p class="text-[11px] text-stone-500">Marque o que colocar nas máquinas.</p>
           </div>
           <button onclick="clearAllOrders()" class="text-xs text-red-600 hover:underline font-semibold">Limpar Tudo</button>
         </div>
 
-        <div id="ordersList" class="flex flex-col gap-2.5 max-h-[380px] overflow-y-auto pr-1">
-          <p class="text-stone-400 text-sm text-center py-6">Carregando pedidos da nuvem...</p>
+        <div id="ordersList" class="flex flex-col gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+          <p class="text-stone-400 text-sm text-center py-6">Carregando pedidos...</p>
         </div>
       </div>
 
     </section>
 
-    <!-- COLUNA 2: Máquinas e Insumos Faltantes (7 cols) -->
+    <!-- COLUNA 2: Máquinas e Insumos (7 cols) -->
     <section class="lg:col-span-7 flex flex-col gap-5">
 
-      <!-- Máquinas em Uso -->
+      <!-- Visão Geral de Máquinas -->
       <div class="hay-card p-4 sm:p-5 border-amber-400 bg-amber-50/30">
         <div class="flex items-center justify-between border-b pb-2 mb-2">
           <h2 class="text-base font-bold text-amber-950 flex items-center gap-2">
@@ -129,13 +168,13 @@
         <h2 class="text-base font-bold text-amber-900 flex items-center gap-2 mb-1">
           <i class="fa-solid fa-gears text-amber-600"></i> Subprodutos Faltando
         </h2>
-        <p class="text-[11px] text-stone-500 mb-3">Itens que precisam ser feitos para liberar outros pratos.</p>
+        <p class="text-[11px] text-stone-500 mb-3">Itens que precisam ser feitos para destravar pratos maiores.</p>
         <div id="intermediatesList" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <p class="text-stone-400 text-sm col-span-full py-2 text-center">Nenhum subproduto pendente.</p>
         </div>
       </div>
 
-      <!-- Matérias-Primas Faltantes -->
+      <!-- Matérias-Primas Básicas -->
       <div class="hay-card p-4 sm:p-5 border-emerald-300 bg-emerald-50/20">
         <h2 class="text-base font-bold text-emerald-950 flex items-center gap-2 mb-1">
           <i class="fa-solid fa-seedling text-emerald-600"></i> Matérias-Primas Pendentes (Lavoura/Animais)
@@ -152,75 +191,29 @@
 
   <script>
     // ==========================================
-    // 1. CONFIGURAÇÃO DO FIREBASE (COLE A SUA AQUI)
+    // 1. CONFIGURAÇÃO DO FIREBASE (INSIRA SUAS CHAVES)
     // ==========================================
-  const firebaseConfig = {
-    apiKey: "AIzaSyC3tuxMBosVWyXuFUl_OpGxWVpamTDoJMA",
-    authDomain: "hayday-helper.firebaseapp.com",
-    projectId: "hayday-helper",
-    storageBucket: "hayday-helper.firebasestorage.app",
-    messagingSenderId: "784996437828",
-    appId: "1:784996437828:web:4830e2aecf4ae1ddbf5111"
-  };
+    const firebaseConfig = {
+      apiKey: "SUA_API_KEY_AQUI",
+      authDomain: "SEU_PROJETO.firebaseapp.com",
+      projectId: "SEU_PROJECT_ID",
+      storageBucket: "SEU_PROJETO.appspot.com",
+      messagingSenderId: "SEU_SENDER_ID",
+      appId: "SEU_APP_ID"
+    };
 
-    // Inicializa Firebase & Firestore
     firebase.initializeApp(firebaseConfig);
-    // Faz login anônimo automático no navegador (gera um token seguro de sessão)
-    firebase.auth().signInAnonymously().catch((error) => {
-      console.error("Erro na autenticação anônima:", error);
-    });
     const db = firebase.firestore();
     const ordersCol = db.collection("orders");
 
+    // Autenticação anônima para segurança
+    firebase.auth().signInAnonymously().catch(err => console.error("Erro auth anônima:", err));
+
     // ==========================================
-    // 2. BANCO DE DADOS DE RECEITAS DO HAY DAY
+    // 2. BANCO DE DADOS DE RECEITAS
     // ==========================================
     const DB = {
-      // Lavoura / Animais
-      // "Trigo": { icon: "🌾", machine: null, ingredients: null },
-      // "Milho": { icon: "🌽", machine: null, ingredients: null },
-      // "Cenoura": { icon: "🥕", machine: null, ingredients: null },
-      // "Soja": { icon: "🌱", machine: null, ingredients: null },
-      // "Cana-de-Açúcar": { icon: "🎋", machine: null, ingredients: null },
-      // "Tomate": { icon: "🍅", machine: null, ingredients: null },
-      // "Leite": { icon: "🥛", machine: null, ingredients: null },
-      // "Ovo": { icon: "🥚", machine: null, ingredients: null },
-      // "Bacon": { icon: "🥓", machine: null, ingredients: null },
-
-      // // Engenho de Açúcar
-      // "Açúcar Mascavo": { icon: "🟫", machine: "Engenho de Açúcar", ingredients: { "Cana-de-Açúcar": 1 } },
-      // "Açúcar Branco": { icon: "⬜", machine: "Engenho de Açúcar", ingredients: { "Cana-de-Açúcar": 2 } },
-      // "Xarope": { icon: "🍯", machine: "Engenho de Açúcar", ingredients: { "Cana-de-Açúcar": 4 } },
-
-      // // Laticínio
-      // "Creme de Leite": { icon: "🍶", machine: "Laticínio", ingredients: { "Leite": 1 } },
-      // "Manteiga": { icon: "🧈", machine: "Laticínio", ingredients: { "Leite": 2 } },
-      // "Queijo": { icon: "🧀", machine: "Laticínio", ingredients: { "Leite": 3 } },
-
-      // // Padaria
-      // "Pão": { icon: "🍞", machine: "Padaria", ingredients: { "Trigo": 3 } },
-      // "Pão de Milho": { icon: "🥖", machine: "Padaria", ingredients: { "Milho": 2, "Ovo": 2 } },
-      // "Cookie": { icon: "🍪", machine: "Padaria", ingredients: { "Trigo": 2, "Açúcar Mascavo": 1, "Ovo": 2 } },
-      // "Pizza": { icon: "🍕", machine: "Padaria", ingredients: { "Trigo": 2, "Tomate": 1, "Queijo": 1 } },
-
-      // // Forno de Tortas
-      // "Torta de Cenoura": { icon: "🥧", machine: "Forno de Tortas", ingredients: { "Cenoura": 3, "Trigo": 2, "Ovo": 1 } },
-      // "Torta de Bacon": { icon: "🥧", machine: "Forno de Tortas", ingredients: { "Bacon": 2, "Ovo": 1, "Trigo": 2 } },
-
-      // // Churrasqueira
-      // "Panqueca": { icon: "🥞", machine: "Churrasqueira", ingredients: { "Ovo": 3, "Açúcar Mascavo": 1 } },
-      // "Bacon com Ovos": { icon: "🍳", machine: "Churrasqueira", ingredients: { "Ovo": 4, "Bacon": 2 } },
-      // "Hambúrguer": { icon: "🍔", machine: "Churrasqueira", ingredients: { "Pão": 2, "Bacon": 2 } },
-
-      // // Pipoqueira
-      // "Pipoca": { icon: "🍿", machine: "Pipoqueira", ingredients: { "Milho": 2 } },
-      // "Pipoca Amanteigada": { icon: "🍿", machine: "Pipoqueira", ingredients: { "Milho": 2, "Manteiga": 1 } },
-
-      // // Confeitaria
-      // "Bolo de Cenoura": { icon: "🎂", machine: "Confeitaria", ingredients: { "Cenoura": 2, "Açúcar Mascavo": 1, "Manteiga": 1 } }
-
-      
-      "Abacaxi": { icon: "🍍", machine: null, ingredients: null },
+            "Abacaxi": { icon: "🍍", machine: null, ingredients: null },
       "Abóbora": { icon: "🎃", machine: null, ingredients: null },
       "Algodão": { icon: "☁️", machine: null, ingredients: null },
       "Almofada Calmante": { icon: "🛋️", machine: "Máquina de Costura", ingredients: { "Tecido de Algodão": 2, "Trigo": 5, "Camomila": 5 } },
@@ -366,30 +359,169 @@
       "Xarope": { icon: "🍯", machine: "Engenho", ingredients: { "Cana de açúcar": 4 } },
       "Índigo": { icon: "🔷", machine: null, ingredients: null }
 
+  
     };
 
-    // Estado local em memória
     let orders = [];
+    let selectedItemKey = null; // Armazena o produto escolhido na busca
+    let focusedIndex = -1;      // Para navegação com setas do teclado
 
     // ==========================================
-    // 3. SINCRONIZAÇÃO EM TEMPO REAL (FIRESTORE)
+    // 3. AUTOCOMPLETE INTELIGENTE ESTILO GOOGLE
     // ==========================================
-    ordersCol.onSnapshot(snapshot => {
-      orders = [];
-      snapshot.forEach(doc => {
-        orders.push({ id: doc.id, ...doc.data() });
+    const searchInput = document.getElementById("productSearchInput");
+    const autocompleteList = document.getElementById("autocompleteList");
+    const clearBtn = document.getElementById("clearSearchBtn");
+
+    // Remove acentuação e converte para minúsculas para facilitar a digitação
+    function normalize(text) {
+      return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    }
+
+    function getCraftableItems() {
+      const selectedMachine = document.getElementById("categorySelect").value;
+      return Object.keys(DB).filter(key => {
+        if (!DB[key].machine) return false; // Apenas itens produzíveis
+        if (selectedMachine !== "all" && DB[key].machine !== selectedMachine) return false;
+        return true;
       });
-      render();
-    }, error => {
-      console.error("Erro no Firestore:", error);
-      document.getElementById("syncIndicator").innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-400"></i> Desconectado`;
+    }
+
+    function renderAutocompleteSuggestions(filterText = "") {
+      const cleanFilter = normalize(filterText.trim());
+      const items = getCraftableItems();
+
+      const matches = items.filter(key => {
+        if (!cleanFilter) return true;
+        const normKey = normalize(key);
+        const normMach = normalize(DB[key].machine);
+        return normKey.includes(cleanFilter) || normMach.includes(cleanFilter);
+      });
+
+      if (matches.length === 0) {
+        autocompleteList.innerHTML = `<div class="p-3 text-xs text-stone-400 text-center">Nenhum produto correspondente.</div>`;
+        autocompleteList.classList.remove("hidden");
+        return;
+      }
+
+      autocompleteList.innerHTML = matches.map((key, index) => `
+        <div 
+          data-item="${key}" 
+          data-index="${index}"
+          class="suggestion-item flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-amber-100/70 border-b border-stone-100 last:border-0 transition"
+        >
+          <div class="flex items-center gap-2">
+            <span class="text-xl">${DB[key].icon}</span>
+            <span class="font-semibold text-xs sm:text-sm text-stone-800">${key}</span>
+          </div>
+          <span class="text-[10px] text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full border border-stone-200">
+            ${DB[key].machine}
+          </span>
+        </div>
+      `).join("");
+
+      autocompleteList.classList.remove("hidden");
+      focusedIndex = -1;
+
+      // Evento de clique em cada sugestão
+      document.querySelectorAll(".suggestion-item").forEach(itemEl => {
+        itemEl.addEventListener("click", () => {
+          selectProduct(itemEl.dataset.item);
+        });
+      });
+    }
+
+    function selectProduct(key) {
+      if (!DB[key]) return;
+      selectedItemKey = key;
+      searchInput.value = key;
+      clearBtn.classList.remove("hidden");
+      autocompleteList.classList.add("hidden");
+
+      // Atualiza badge de seleção
+      document.getElementById("selectedItemName").textContent = `${DB[key].icon} ${key}`;
+      document.getElementById("selectedItemMachine").textContent = DB[key].machine;
+      document.getElementById("selectedBadge").classList.remove("hidden");
+    }
+
+    function clearSearch() {
+      searchInput.value = "";
+      selectedItemKey = null;
+      clearBtn.classList.add("hidden");
+      document.getElementById("selectedBadge").classList.add("hidden");
+      autocompleteList.classList.add("hidden");
+      searchInput.focus();
+    }
+
+    // Eventos do campo de pesquisa
+    searchInput.addEventListener("input", (e) => {
+      const val = e.target.value;
+      if (val.trim().length > 0) {
+        clearBtn.classList.remove("hidden");
+      } else {
+        clearBtn.classList.add("hidden");
+        selectedItemKey = null;
+        document.getElementById("selectedBadge").classList.add("hidden");
+      }
+      renderAutocompleteSuggestions(val);
     });
 
-    window.onload = () => {
-      populateCategories();
-      populateItems();
-      document.getElementById("categorySelect").addEventListener("change", populateItems);
-    };
+    searchInput.addEventListener("focus", () => {
+      renderAutocompleteSuggestions(searchInput.value);
+    });
+
+    // Navegação por teclado (Setas e Enter)
+    searchInput.addEventListener("keydown", (e) => {
+      const items = autocompleteList.querySelectorAll(".suggestion-item");
+      if (items.length === 0 || autocompleteList.classList.contains("hidden")) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        focusedIndex = (focusedIndex + 1) % items.length;
+        highlightSuggestion(items);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        focusedIndex = (focusedIndex - 1 + items.length) % items.length;
+        highlightSuggestion(items);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (focusedIndex >= 0 && items[focusedIndex]) {
+          selectProduct(items[focusedIndex].dataset.item);
+        } else if (items.length > 0) {
+          selectProduct(items[0].dataset.item); // Seleciona o primeiro da lista
+        }
+      } else if (e.key === "Escape") {
+        autocompleteList.classList.add("hidden");
+      }
+    });
+
+    function highlightSuggestion(items) {
+      items.forEach((item, idx) => {
+        if (idx === focusedIndex) {
+          item.classList.add("bg-amber-200");
+          item.scrollIntoView({ block: "nearest" });
+        } else {
+          item.classList.remove("bg-amber-200");
+        }
+      });
+    }
+
+    // Fechar sugestões ao clicar fora do componente
+    document.addEventListener("click", (e) => {
+      if (!searchInput.contains(e.target) && !autocompleteList.contains(e.target)) {
+        autocompleteList.classList.add("hidden");
+      }
+    });
+
+    // ==========================================
+    // 4. OPERAÇÕES DE PEDIDOS
+    // ==========================================
+    function adjustOrderQty(amount) {
+      const input = document.getElementById("orderItemQty");
+      let val = parseInt(input.value) || 1;
+      val = Math.max(1, Math.min(99, val + amount));
+      input.value = val;
+    }
 
     function populateCategories() {
       const select = document.getElementById("categorySelect");
@@ -400,50 +532,48 @@
         opt.textContent = m;
         select.appendChild(opt);
       });
-    }
 
-    function populateItems() {
-      const cat = document.getElementById("categorySelect").value;
-      const select = document.getElementById("itemSelect");
-      select.innerHTML = "";
-
-      Object.keys(DB).forEach(key => {
-        if (!DB[key].machine) return;
-        if (cat === "all" || DB[key].machine === cat) {
-          const opt = document.createElement("option");
-          opt.value = key;
-          opt.textContent = `${DB[key].icon} ${key} (${DB[key].machine})`;
-          select.appendChild(opt);
+      select.addEventListener("change", () => {
+        if (!searchInput.value.trim()) {
+          renderAutocompleteSuggestions("");
         }
       });
     }
 
-    function adjustOrderQty(amount) {
-      const input = document.getElementById("orderItemQty");
-      let val = parseInt(input.value) || 1;
-      val = Math.max(1, Math.min(99, val + amount));
-      input.value = val;
-    }
-
-    // Ações que gravam no Firebase
     async function addOrder() {
-      const itemName = document.getElementById("itemSelect").value;
-      const qty = parseInt(document.getElementById("orderItemQty").value) || 1;
-      if (!itemName) return;
+      // Se não clicou na lista, tenta achar o item pelo que foi digitado
+      let itemNameToAdd = selectedItemKey;
 
-      const existing = orders.find(o => o.item === itemName);
+      if (!itemNameToAdd && searchInput.value.trim()) {
+        const typed = normalize(searchInput.value.trim());
+        const match = Object.keys(DB).find(k => DB[k].machine && normalize(k) === typed);
+        if (match) itemNameToAdd = match;
+      }
+
+      if (!itemNameToAdd) {
+        alert("Por favor, digite e selecione um produto da lista de sugestões.");
+        searchInput.focus();
+        return;
+      }
+
+      const qty = parseInt(document.getElementById("orderItemQty").value) || 1;
+
+      const existing = orders.find(o => o.item === itemNameToAdd);
       if (existing) {
         await ordersCol.doc(existing.id).update({
           totalQty: existing.totalQty + qty
         });
       } else {
         await ordersCol.add({
-          item: itemName,
+          item: itemNameToAdd,
           totalQty: qty,
           inProduction: 0,
           createdAt: Date.now()
         });
       }
+
+      // Limpa para a próxima busca
+      clearSearch();
     }
 
     async function updateInProduction(id, delta) {
@@ -458,16 +588,30 @@
     }
 
     async function clearAllOrders() {
+      if (orders.length === 0) return;
       const batch = db.batch();
-      orders.forEach(o => {
-        batch.delete(ordersCol.doc(o.id));
-      });
+      orders.forEach(o => batch.delete(ordersCol.doc(o.id)));
       await batch.commit();
     }
 
     // ==========================================
-    // 4. CÁLCULO DE DEPENDÊNCIAS
+    // 5. CÁLCULOS E SINCRONIZAÇÃO
     // ==========================================
+    ordersCol.onSnapshot(snapshot => {
+      orders = [];
+      snapshot.forEach(doc => {
+        orders.push({ id: doc.id, ...doc.data() });
+      });
+      render();
+    }, err => {
+      console.error(err);
+      document.getElementById("syncIndicator").innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-400"></i> Desconectado`;
+    });
+
+    window.onload = () => {
+      populateCategories();
+    };
+
     function calculateRequirements() {
       const rawTotals = {};
       const intermediateTotals = {};
@@ -512,13 +656,10 @@
       return { rawTotals, intermediateTotals, machineWorkload };
     }
 
-    // ==========================================
-    // 5. RENDERIZAÇÃO
-    // ==========================================
     function render() {
       const { rawTotals, intermediateTotals, machineWorkload } = calculateRequirements();
 
-      // Renderizar Pedidos
+      // Renderizar Fila de Pedidos
       const ordersContainer = document.getElementById("ordersList");
       if (orders.length === 0) {
         ordersContainer.innerHTML = `<p class="text-stone-400 text-sm text-center py-6">Nenhum pedido cadastrado.</p>`;
@@ -594,7 +735,7 @@
         }).join("");
       }
 
-      // Renderizar Intermediários
+      // Renderizar Intermediários Faltando
       const interContainer = document.getElementById("intermediatesList");
       const interKeys = Object.keys(intermediateTotals);
       if (interKeys.length === 0) {
