@@ -213,14 +213,14 @@
     // ==========================================
     // 1. CONFIGURAÇÃO DO FIREBASE (INSIRA SUAS CHAVES)
     // ==========================================
-  const firebaseConfig = {
-    apiKey: "AIzaSyC3tuxMBosVWyXuFUl_OpGxWVpamTDoJMA",
-    authDomain: "hayday-helper.firebaseapp.com",
-    projectId: "hayday-helper",
-    storageBucket: "hayday-helper.firebasestorage.app",
-    messagingSenderId: "784996437828",
-    appId: "1:784996437828:web:4830e2aecf4ae1ddbf5111"
-  };
+    const firebaseConfig = {
+      apiKey: "AIzaSyC3tuxMBosVWyXuFUl_OpGxWVpamTDoJMA",
+      authDomain: "hayday-helper.firebaseapp.com",
+      projectId: "hayday-helper",
+      storageBucket: "hayday-helper.firebasestorage.app",
+      messagingSenderId: "784996437828",
+      appId: "1:784996437828:web:4830e2aecf4ae1ddbf5111"
+    };
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
@@ -390,7 +390,7 @@
       "Manta": { icon: "👕", machine: "Máquina de Costura", ingredients: { "Tecido de Algodão": 3, "Pena de Pato": 5, "Abóbora": 1 } },
       "Salada com Queijo": { icon: "🥗", machine: "Balcão de Saladas", ingredients: { "Alface": 3, "Queijo de Cabra": 2, "Tomates Assados": 1, "Azeitonas": 2 } },
       "Salada de Feijão": { icon: "🥗", machine: "Balcão de Saladas", ingredients: { "Alface": 2, "Feijões Pretos": 3, "Tomate": 1, "Milho": 1 } }
-      };
+    };
 
     let orders = [];
     let selectedItemKey = null;
@@ -557,6 +557,30 @@
       });
     }
 
+    // Coleta todos os níveis de subprodutos em pós-ordem (subprodutos antes do item principal)
+    function collectItemsWithSubproducts(rootItem, rootQty) {
+      const orderedMap = new Map();
+
+      function traverse(itemName, count, path = new Set()) {
+        if (count <= 0 || path.has(itemName)) return;
+        const data = DB[itemName];
+        if (!data || !data.machine) return; // Somente itens fabricáveis entram na fila de pedidos
+
+        path.add(itemName);
+        if (data.ingredients) {
+          for (const [subItem, subQty] of Object.entries(data.ingredients)) {
+            traverse(subItem, subQty * count, path);
+          }
+        }
+        path.delete(itemName);
+
+        orderedMap.set(itemName, (orderedMap.get(itemName) || 0) + count);
+      }
+
+      traverse(rootItem, rootQty);
+      return Array.from(orderedMap.entries()).map(([item, qty]) => ({ item, qty }));
+    }
+
     async function addOrder() {
       let itemNameToAdd = selectedItemKey;
 
@@ -573,22 +597,115 @@
       }
 
       const qty = parseInt(document.getElementById("orderItemQty").value) || 1;
-      const existing = orders.find(o => o.item === itemNameToAdd);
+      const itemsToQueue = collectItemsWithSubproducts(itemNameToAdd, qty);
 
-      if (existing) {
-        await ordersCol.doc(existing.id).update({
-          totalQty: existing.totalQty + qty
+      const batch = db.batch();
+      const baseTime = Date.now();
+
+      itemsToQueue.forEach((entry, idx) => {
+        const existing = orders.find(o => o.item === entry.item);
+
+        if (existing) {
+          batch.update(ordersCol.doc(existing.id), {
+            totalQty: existing.totalQty + entry.qty
+          });
+        } else {
+          const newDocRef = ordersCol.doc();
+          batch.set(newDocRef, {
+            item: entry.item,
+            totalQty: entry.qty,
+            inProduction: 0,
+            createdAt: baseTime + idx
+          });
+        }
+      });
+
+      await batch.commit();
+
+      // Retorna o campo Qtd para 1 após adicionar qualquer produto
+      document.getElementById("orderItemQty").value = 1;
+      clearSearch();
+    }
+
+    // Remove ou reduz proporcionalmente todos os subprodutos quando o pedido principal é concluído ou apagado
+    function finalizeOrderWithSubproducts(order, isConcluding) {
+      const stateByItem = new Map();
+      orders.forEach(o => {
+        stateByItem.set(o.item, {
+          id: o.id,
+          item: o.item,
+          totalQty: o.totalQty,
+          inProduction: o.inProduction,
+          deleted: false,
+          changed: false
         });
-      } else {
-        await ordersCol.add({
-          item: itemNameToAdd,
-          totalQty: qty,
-          inProduction: 0,
-          createdAt: Date.now()
-        });
+      });
+
+      function cascadeSubproducts(parentItem, removedParentQty, producedParentQty, path = new Set()) {
+        if (removedParentQty <= 0 || path.has(parentItem)) return;
+        const data = DB[parentItem];
+        if (!data || !data.ingredients) return;
+
+        path.add(parentItem);
+        for (const [subItem, subQty] of Object.entries(data.ingredients)) {
+          const subState = stateByItem.get(subItem);
+          if (!subState || subState.deleted || subState.totalQty <= 0) continue;
+
+          const neededRemove = subQty * removedParentQty;
+          const actualRemoved = Math.min(neededRemove, subState.totalQty);
+          if (actualRemoved <= 0) continue;
+
+          const subProduced = Math.min(actualRemoved, subQty * producedParentQty);
+
+          subState.totalQty -= actualRemoved;
+          subState.inProduction = Math.max(0, subState.inProduction - subProduced);
+          subState.changed = true;
+
+          if (subState.totalQty <= 0 || subState.inProduction >= subState.totalQty) {
+            subState.deleted = true;
+          }
+
+          cascadeSubproducts(subItem, actualRemoved, subProduced, path);
+        }
+        path.delete(parentItem);
       }
 
-      clearSearch();
+      const rootProducedQty = isConcluding ? order.totalQty : order.inProduction;
+      cascadeSubproducts(order.item, order.totalQty, rootProducedQty);
+
+      const batch = db.batch();
+      const deletedIds = [order.id];
+
+      batch.delete(ordersCol.doc(order.id));
+      stateByItem.forEach(st => {
+        if (st.id === order.id || !st.changed) return;
+        if (st.deleted) {
+          deletedIds.push(st.id);
+          batch.delete(ordersCol.doc(st.id));
+        } else {
+          batch.update(ordersCol.doc(st.id), {
+            totalQty: st.totalQty,
+            inProduction: st.inProduction
+          });
+        }
+      });
+
+      // Aplica animação de saída nos cards que serão removidos
+      deletedIds.forEach(cardId => {
+        const cardElement = document.getElementById(`order-card-${cardId}`);
+        if (cardElement) {
+          if (isConcluding && cardId === order.id) {
+            const textEl = cardElement.querySelector('.production-status-text');
+            if (textEl) textEl.innerHTML = `<i class="fa-solid fa-check text-emerald-600 mr-1"></i> Concluído!`;
+          }
+          cardElement.classList.add("order-finishing");
+        }
+      });
+
+      const delay = isConcluding ? 450 : 300;
+      setTimeout(async () => {
+        await batch.commit();
+      }, delay);
     }
 
     // AQUI OCORRE A CONVERSÃO E REMOÇÃO QUANDO ATINGE 100%
@@ -598,21 +715,9 @@
 
       const newVal = Math.max(0, order.inProduction + delta);
 
-      // Se atingiu o total de pedidos, ativa a animação e exclui do banco
+      // Se atingiu o total de pedidos, remove ele e seus subprodutos com animação
       if (newVal >= order.totalQty) {
-        const cardElement = document.getElementById(`order-card-${id}`);
-        if (cardElement) {
-          // Atualiza visualmente para 100% imediatamente
-          const textEl = cardElement.querySelector('.production-status-text');
-          if (textEl) textEl.innerHTML = `<i class="fa-solid fa-check text-emerald-600 mr-1"></i> Concluído!`;
-          cardElement.classList.add("order-finishing");
-        }
-
-        // Aguarda 450ms para a animação suave terminar e apaga do Firestore
-        setTimeout(async () => {
-          await ordersCol.doc(id).delete();
-        }, 450);
-
+        finalizeOrderWithSubproducts(order, true);
       } else {
         // Se ainda não concluiu, apenas atualiza o progresso
         await ordersCol.doc(id).update({ inProduction: newVal });
@@ -620,15 +725,12 @@
     }
 
     async function removeOrder(id) {
-      const cardElement = document.getElementById(`order-card-${id}`);
-      if (cardElement) {
-        cardElement.classList.add("order-finishing");
-        setTimeout(async () => {
-          await ordersCol.doc(id).delete();
-        }, 300);
-      } else {
+      const order = orders.find(o => o.id === id);
+      if (!order) {
         await ordersCol.doc(id).delete();
+        return;
       }
+      finalizeOrderWithSubproducts(order, false);
     }
 
     async function clearAllOrders() {
@@ -646,6 +748,8 @@
       snapshot.forEach(doc => {
         orders.push({ id: doc.id, ...doc.data() });
       });
+      // Mantém a fila ordenada para que subprodutos fiquem antes do item principal
+      orders.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       render();
     }, err => {
       console.error(err);
@@ -660,6 +764,8 @@
       const rawTotals = {};
       const intermediateTotals = {};
       const machineWorkload = {};
+      const remainingInOrders = {};
+      const demandedAsSubproduct = {};
 
       function registerMachineTask(machine, item, count) {
         if (!machine || count <= 0) return;
@@ -667,35 +773,45 @@
         machineWorkload[machine][item] = (machineWorkload[machine][item] || 0) + count;
       }
 
-      function resolveItem(itemName, count, isRoot = false) {
-        if (count <= 0) return;
-        const data = DB[itemName];
-        if (!data) return;
-
-        if (!data.ingredients) {
-          rawTotals[itemName] = (rawTotals[itemName] || 0) + count;
-          return;
-        }
-
-        if (data.machine) {
-          registerMachineTask(data.machine, itemName, count);
-        }
-
-        if (!isRoot) {
-          intermediateTotals[itemName] = (intermediateTotals[itemName] || 0) + count;
-        }
-
-        for (const [subItem, subQty] of Object.entries(data.ingredients)) {
-          resolveItem(subItem, subQty * count, false);
-        }
-      }
-
+      // Como os subprodutos agora também estão na fila (orders),
+      // cada pedido contabiliza a si próprio na máquina e apenas suas matérias-primas diretas (evitando dupla contagem).
       orders.forEach(order => {
         const remaining = order.totalQty - order.inProduction;
-        if (remaining > 0) {
-          resolveItem(order.item, remaining, true);
+        if (remaining <= 0) return;
+
+        remainingInOrders[order.item] = (remainingInOrders[order.item] || 0) + remaining;
+
+        const data = DB[order.item];
+        if (!data) return;
+
+        if (data.machine) {
+          registerMachineTask(data.machine, order.item, remaining);
+        }
+
+        if (data.ingredients) {
+          for (const [ingName, ingQty] of Object.entries(data.ingredients)) {
+            const ingData = DB[ingName];
+            if (!ingData) continue;
+
+            if (!ingData.ingredients) {
+              // Matéria-prima básica
+              rawTotals[ingName] = (rawTotals[ingName] || 0) + (ingQty * remaining);
+            } else {
+              // Subproduto exigido por este pedido
+              demandedAsSubproduct[ingName] = (demandedAsSubproduct[ingName] || 0) + (ingQty * remaining);
+            }
+          }
         }
       });
+
+      // Subprodutos Faltando: apenas os demandados por outros itens da fila e que ainda estão pendentes na fila
+      for (const [subItem, demandedQty] of Object.entries(demandedAsSubproduct)) {
+        const pendingQty = remainingInOrders[subItem] || 0;
+        const missingQty = Math.min(demandedQty, pendingQty);
+        if (missingQty > 0) {
+          intermediateTotals[subItem] = missingQty;
+        }
+      }
 
       return { rawTotals, intermediateTotals, machineWorkload };
     }
@@ -709,13 +825,21 @@
         ordersContainer.innerHTML = `<p class="text-stone-400 text-sm text-center py-6">Nenhum pedido cadastrado no momento.</p>`;
       } else {
         ordersContainer.innerHTML = orders.map(o => {
+          const isSubproduct = (intermediateTotals[o.item] || 0) > 0;
+          const subBadge = isSubproduct
+            ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-200/80 text-amber-900 border border-amber-300">Subproduto</span>`
+            : "";
+
           return `
             <div id="order-card-${o.id}" class="p-2.5 sm:p-3 rounded-xl border bg-amber-50/70 border-amber-200 flex flex-col gap-2 transition duration-200">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <span class="text-2xl">${DB[o.item]?.icon || '📦'}</span>
                   <div>
-                    <h3 class="font-bold text-xs sm:text-sm text-amber-950">${o.item}</h3>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <h3 class="font-bold text-xs sm:text-sm text-amber-950">${o.item}</h3>
+                      ${subBadge}
+                    </div>
                     <p class="text-[10px] text-stone-500">${DB[o.item]?.machine || 'Máquina'}</p>
                   </div>
                 </div>
